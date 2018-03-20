@@ -2,9 +2,39 @@
 
 import argparse
 import pickle
+from os.path import expanduser, exists, isfile
+from os import makedirs
+import pygame
+import pygame.camera
+import pygame.image
+import pygame.display
+from time import sleep
+import os
 
-class Warehouse:
-    def __init__(self):
+def check_create_dir(mydir):
+    if not exists(mydir):
+        if isfile(mydir):
+            print "Desired directory is actually a file, please remove this file before continuing"
+            return(False)
+        else:
+            print "Creating desired directory"
+            makedirs(mydir)
+            return(True)
+    else:
+        if not isfile(mydir):
+            return(True)
+        else:
+            print "Desired directory is actually a file, please remove this file before continuing"
+            return(False)
+
+
+
+
+class Warehouse(object):
+    usage_functions=["unspecified", "hand tool", "electric tool", "electronic component", "raw metal", "raw plastic", "computer accesory"]
+    working_states=["unknow", "good", "bad"]
+    def __init__(self, pictures_dir):
+        self.pictures_dir=pictures_dir
         self.data={
             "items": set(),
             "locations": set(),
@@ -15,7 +45,28 @@ class Warehouse:
     def add_user_from_keyboard(self):
         print "Adding new user"
         name=raw_input("Give new username\n")
-        user=User(name)
+
+        print "Taking picture"
+        cam=pygame.camera.Camera("/dev/video0", (1280, 720))
+        cam.start()
+        raw_input("Press enter when ready")
+        image=cam.get_image()
+        picture_filename=self.pictures_dir+"users/"
+        if not check_create_dir(picture_filename):
+            exit(1)
+        picture_filename+=name+".jpg"
+
+        print "Picture filename", picture_filename
+        pygame.image.save(image, picture_filename)
+        display=pygame.display.set_mode((1280, 720), 0)
+        display.blit(image, (0,0))
+        pygame.display.flip()
+        #sleep(2)
+        raw_input("Press enter to close window")
+        pygame.display.quit()
+
+        user=User(name, picture_filename=picture_filename)
+
         if user not in self.data["users"]:
             #take picture
             self.data["users"].add(user)
@@ -26,7 +77,8 @@ class Warehouse:
     def add_location_from_keyboard(self):
         print "Adding new location"
         name=raw_input("Give new location\n")
-        location=Location(name)
+        description=raw_input("Enter a description\n")
+        location=Location(name, description)
         if location not in self.data["locations"]:
             #take picture
             self.data["locations"].add(location)
@@ -37,7 +89,8 @@ class Warehouse:
     def add_team_from_keyboard(self):
         print "Adding new team"
         name=raw_input("Give new team\n")
-        team=Team(name)
+        description=raw_input("Enter a description\n")
+        team=Team(name, description)
         if team not in self.data["teams"]:
             #take picture
             self.data["teams"].add(team)
@@ -49,14 +102,87 @@ class Warehouse:
         print "Adding new item"
         name=raw_input("Give new item name\n")
         description=raw_input("Description:\n")
+        print "Select location number\n"
+        locations=[]
+        for i, location in enumerate(self.data["locations"]):
+            locations.append(location)
+            print i, ": ", location
         #location (select from posible locations)
-        item=Item(self.data, name, )
+        location_n=int(raw_input())
+        location=locations[location_n]
+        print "Selected location: ", location
+        usage_frequency=int(raw_input("Select usage frequency (0: low, 1: medium, 2: high)\n"))
+
+        print "Select team (0: unspecified)\n"
+        teams=[]
+        for i, team in enumerate(self.data["teams"]):
+            teams.append(team)
+            print i, ": ", team
+        #team (select from posible teams)
+        team_n=int(raw_input())
+        team=teams[team_n]
+        print "Selected team: ", team
+
+        print "Select guardian (0: unspecified)\n"
+        users=[]
+        for i, user in enumerate(self.data["users"]):
+            users.append(user)
+            print i, ": ", user
+        #guardian (select from posible users)
+        user_n=int(raw_input())
+        guardian=users[user_n]
+        print "Selected guardian: ", guardian
+
+        print "Select usage function (0: unspecified)\n"
+        for i, usage_function in enumerate(self.usage_functions):
+            print i, ": ", usage_function
+        #usage_function (select from posible usage_functions)
+        usage_function_n=int(raw_input())
+        usage_function=self.usage_functions[usage_function_n]
+        print "Selected usage_function: ", usage_function
+
+        placa=int(raw_input("Enter \"placa\":\n"))
+        # todo: check placa is not repeated
+
+        print "Select working state (0: unknow)\n"
+        for i, working_state in enumerate(self.working_states):
+            print i, ": ", working_state
+        working_state_n=int(raw_input())
+        working_state=self.working_states[working_state_n]
+        print "Selected working state: ", working_state
+
+        if working_state == "bad":
+            working_state_description=raw_input("Enter a working state description:\n")
+        else:
+            working_state_description=""
+
+        print "Taking picture"
+        cam=pygame.camera.Camera("/dev/video0", (1280, 720))
+        cam.start()
+        raw_input("Press enter when ready")
+        image=cam.get_image()
+        picture_filename=self.pictures_dir+"items/"
+        if not check_create_dir(picture_filename):
+            exit(1)
+        picture_filename+=name+".jpg"
+
+        print "Picture filename", picture_filename
+        pygame.image.save(image, picture_filename)
+        display=pygame.display.set_mode((1280, 720), 0)
+        display.blit(image, (0,0))
+        pygame.display.flip()
+        #sleep(2)
+        raw_input("Press enter to close window")
+        pygame.display.quit()
+
+        item=Item(self.data, name, description, location, usage_frequency, team, guardian, usage_function, working_state, working_state_description=working_state_description, placa=placa, picture_filename=picture_filename)
         if item not in self.data["items"]:
-            #take picture
+            item.barcode_id=len(self.data["items"])
             self.data["items"].add(item)
         else:
             print "Item already in database"
         print "Items: ", self.data["items"]
+        return(item)
 
     def load_from_file(self, filename):
         f=open(filename,'rb')
@@ -69,8 +195,14 @@ class Warehouse:
         pickle.dump(self.data, f, pickle.HIGHEST_PROTOCOL)
         f.close()
 
+    def __repr__(self):
+        return("users: "+repr(self.data["users"])+"\n"
+               +"teams: "+repr(self.data["teams"])+"\n"
+               +"locations: "+repr(self.data["locations"])+"\n"
+               +"items: "+repr(self.data["items"]))
+
 class Item:
-    def __init__(self, parent, name, description, location, usage_frequency, team, guardian, usage_function, stored=True, placa=None, working_state=True, working_state_description="All fine", picture_filename=None):
+    def __init__(self, parent, name, description, location, usage_frequency, team, guardian, usage_function, working_state, stored=True, placa=None, working_state_description="All fine", picture_filename=None):
         self.parent=parent
         self.name=name
         self.description=description
@@ -86,12 +218,18 @@ class Item:
         self.working_state=working_state
         self.working_state_description=working_state_description
         self.picture_filename=picture_filename
+        self.barcode_id=None
 
     def __hash__(self):
         return(hash(self.name))
 
     def __eq__(self, other):
         return(hash(self)==hash(other))
+
+    def __repr__(self):
+        print "Repr: "
+        print self.name, self.description, self.location.name, self.guardian.name, self.working_state
+        return("\n"+self.name+", "+"Description: "+self.description+", "+"Location: "+self.location.name+", "+"Guardian: "+self.guardian.name+", "+"State: "+self.working_state+", Picture: "+self.picture_filename.split("/")[-1])
 
 class Location:
     def __init__(self, name, description, picture_filename=None):
@@ -105,6 +243,9 @@ class Location:
     def __eq__(self, other):
         return(hash(self)==hash(other))
 
+    def __repr__(self):
+        return("\n"+self.name+", "+"Description: "+str(self.description))
+
 class Team:
     def __init__(self, name, description):
         self.name=name
@@ -115,6 +256,9 @@ class Team:
 
     def __eq__(self, other):
         return(hash(self)==hash(other))
+
+    def __repr__(self):
+        return("\n"+self.name+", "+"Description: "+str(self.description))
 
 class User:
     def __init__(self, name, picture_filename=None):
@@ -130,7 +274,7 @@ class User:
 
 
     def __repr__(self):
-        return("\nName: "+self.name+", "+"Punishment: "+str(self.punishment))
+        return("\n"+self.name+", "+"Punishment: "+str(self.punishment))
 
 def main():
     parser=argparse.ArgumentParser()
@@ -140,11 +284,23 @@ def main():
     parser.add_argument("-l", "--location", help="add location to database", action="store_true")
     parser.add_argument("-i", "--item", help="add item to database", action="store_true")
     parser.add_argument("-t", "--team", help="add team to database", action="store_true")
+    parser.add_argument("-s", "--show", help="Print Database", action="store_true")
+    parser.add_argument("-b", "--barcode", help="Print barcode", action="store_true")
+    parser.add_argument("-p", "--pictures_dir", help="pictures_directory", default="warehouse/pictures/")
     parser.add_argument("--load", action="store_true")
     parser.add_argument("--store", action="store_true")
     args=parser.parse_args()
 
-    wh=Warehouse()
+    home_dir= expanduser("~")
+    pictures_dir=home_dir+"/"+args.pictures_dir
+    print "Pictures dir: ", pictures_dir
+    if not check_create_dir(pictures_dir):
+        exit(1)
+
+    wh=Warehouse(pictures_dir)
+    pygame.init()
+    pygame.camera.init()
+    pygame.display.init()
 
     if args.load:
         print "Loading"
@@ -156,14 +312,24 @@ def main():
             wh.add_user_from_keyboard()
         elif args.location:
             print "Adding location"
+            wh.add_location_from_keyboard()
         elif args.item:
             print "Adding item"
+            item=wh.add_item_from_keyboard()
+            if args.barcode:
+                print "Printing barcode: ", item.barcode_id
+                os.system("bincodes -e 39 -b 1 "+str(item.barcode_id)+" | line2bitmap")
         elif args.team:
             print "Adding team"
+            wh.add_team_from_keyboard()
 
     if args.store:
         print "Storing"
         wh.store_to_file("test.dat")
+
+    if args.show:
+        print "Printing database"
+        print wh
 
 if __name__=="__main__":
     main()
