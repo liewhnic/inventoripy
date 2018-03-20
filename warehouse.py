@@ -10,6 +10,7 @@ import pygame.image
 import pygame.display
 from time import sleep
 import os
+import hashlib
 
 def check_create_dir(mydir):
     if not exists(mydir):
@@ -39,7 +40,8 @@ class Warehouse(object):
             "items": set(),
             "locations": set(),
             "users": set(),
-            "teams": set()
+            "teams": set(),
+            "free_barcode": 0
             }
 
     def add_user_from_keyboard(self):
@@ -81,7 +83,11 @@ class Warehouse(object):
         location=Location(name, description)
         if location not in self.data["locations"]:
             #take picture
+            location.barcode_id=self.data["free_barcode"]
+            print "Barcode id: ", location.barcode_id
+            self.data["free_barcode"]+=1
             self.data["locations"].add(location)
+            return(location)
         else:
             print "Location already in database"
         print "Locations: ", self.data["locations"]
@@ -177,12 +183,14 @@ class Warehouse(object):
 
         item=Item(self.data, name, description, location, usage_frequency, team, guardian, usage_function, working_state, working_state_description=working_state_description, placa=placa, picture_filename=picture_filename)
         if item not in self.data["items"]:
-            item.barcode_id=len(self.data["items"])
+            item.barcode_id=self.data["free_barcode"]
+            print "Barcode id: ", item.barcode_id
+            self.data["free_barcode"]+=1
             self.data["items"].add(item)
+            return(item)
         else:
             print "Item already in database"
         print "Items: ", self.data["items"]
-        return(item)
 
     def load_from_file(self, filename):
         f=open(filename,'rb')
@@ -236,6 +244,7 @@ class Location:
         self.name=name
         self.description=description
         self.picture_filename=picture_filename
+        self.barcode_id=None
 
     def __hash__(self):
         return(hash(self.name))
@@ -312,13 +321,16 @@ def main():
             wh.add_user_from_keyboard()
         elif args.location:
             print "Adding location"
-            wh.add_location_from_keyboard()
+            location=wh.add_location_from_keyboard()
+            if args.barcode and location:
+                print "Printing location and barcode: ", location.barcode_id
+                os.system("(bincodes -e 39 -b 1 "+str(location.barcode_id)+" | line2bitmap; textlabel \" "+str(location.name)+"\") | pt1230 -c -m -b -d /dev/usb/lp1")
         elif args.item:
             print "Adding item"
             item=wh.add_item_from_keyboard()
-            if args.barcode:
+            if args.barcode and item:
                 print "Printing barcode: ", item.barcode_id
-                os.system("bincodes -e 39 -b 1 "+str(item.barcode_id)+" | line2bitmap")
+                os.system("bincodes -e 39 -b 1 "+str(item.barcode_id)+" | line2bitmap | pt1230 -c -m -b -d /dev/usb/lp1")
         elif args.team:
             print "Adding team"
             wh.add_team_from_keyboard()
