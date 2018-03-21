@@ -1,5 +1,12 @@
 #!/usr/bin/env python
 
+### add team,user,item,location (option --no_picture)
+### delete item,location with barcode
+### delete with name (display all before asking to delete)
+### search with description or barcode (display all alternatives), select alternative, cmd (delete, quit, print barcode(for item, location))
+### fix pictures_directories (objects relative to pics dir), pics dir from cmdline always
+
+
 import argparse
 import pickle
 from os.path import expanduser, exists, isfile
@@ -16,7 +23,7 @@ import qrtools
 def check_create_dir(mydir):
     if not exists(mydir):
         if isfile(mydir):
-            print "Desired directory is actually a file, please remove this file before continuing"
+            print "Error: Desired directory is actually a file, please remove this file before continuing"
             return(False)
         else:
             print "Creating desired directory"
@@ -26,7 +33,7 @@ def check_create_dir(mydir):
         if not isfile(mydir):
             return(True)
         else:
-            print "Desired directory is actually a file, please remove this file before continuing"
+            print "Error: Desired directory is actually a file, please remove this file before continuing"
             return(False)
 
 detected_barcode=None
@@ -37,6 +44,45 @@ def process_qr(data):
     global detected_barcode
     detected_barcode=data
 
+def detect_barcode():
+    qr=qrtools.QR()
+    qr.decode_webcam(callback=process_qr)
+    if detected_barcode:
+        print "Detected barcode: ", detected_barcode
+        return(int(detected_barcode))
+    else:
+        return(None)
+
+def capture_picture(full_picture_filename):
+    print "Taking picture"
+    cam=pygame.camera.Camera("/dev/video0", (1280, 720))
+    raw_input("Press enter when ready")
+    ready=""
+    while ready=="":
+        cam.start()
+        image=cam.get_image()
+        cam.stop()
+
+        pygame.image.save(image, full_picture_filename)
+        display=pygame.display.set_mode((1280, 720), 0)
+        display.blit(image, (0,0))
+        pygame.display.flip()
+        #sleep(2)
+        ready=raw_input("Press \"y\" when satisfied. Press enter to repeat capture")
+
+    pygame.display.quit()
+
+def show_picture(full_picture_filename):
+    try:
+        image=pygame.image.load(full_picture_filename)
+        display=pygame.display.set_mode((1280, 720), 0)
+        display.blit(image, (0,0))
+        pygame.display.flip()
+        raw_input("Press enter to close window")
+        pygame.display.quit()
+    except:
+        print "Error loading file"
+    
 
 class Warehouse(object):
     usage_functions=["unspecified", "hand tool", "electric tool", "electronic component", "raw metal", "raw plastic", "computer accesory"]
@@ -53,40 +99,44 @@ class Warehouse(object):
 
     def search_item_barcode(self, barcode):
         for item in self.data["items"]:
-            print "Item: ", item.name, " barcode: ", item.barcode_id
             if item.barcode_id==barcode:
                 return(item)
         return(None)
 
     def search_location_barcode(self, barcode):
         for location in self.data["locations"]:
-            print "Location: ", location.name, " barcode: ", location.barcode_id
             if location.barcode_id==barcode:
                 return(location)
         return(None)
 
-    def add_user_from_keyboard(self):
+    def search_barcode(self, barcode):
+        item=self.search_item_barcode(barcode)
+        if item:
+            print "Found item: "
+            return(item)
+        else:
+            location=self.search_location_barcode(barcode)
+            if location:
+                print "Found location: "
+                return(location)
+            else:
+                print "No item or location found"
+                return(None)
+
+    def add_user_from_keyboard(self, nopic=False):
         print "Adding new user"
         name=raw_input("Give new username\n")
 
-        print "Taking picture"
-        cam=pygame.camera.Camera("/dev/video0", (1280, 720))
-        cam.start()
-        raw_input("Press enter when ready")
-        image=cam.get_image()
-        picture_filename=self.pictures_dir+"users/"
-        if not check_create_dir(picture_filename):
-            exit(1)
-        picture_filename+=name+".jpg"
+        if not nopic:
+            users_picture_dir=self.pictures_dir+User.pictures_subdir
+            if not check_create_dir(users_picture_dir):
+                exit(1)
+            picture_filename=name+".jpg"
+            print "Picture filename", picture_filename
 
-        print "Picture filename", picture_filename
-        pygame.image.save(image, picture_filename)
-        display=pygame.display.set_mode((1280, 720), 0)
-        display.blit(image, (0,0))
-        pygame.display.flip()
-        #sleep(2)
-        raw_input("Press enter to close window")
-        pygame.display.quit()
+            capture_picture(users_picture_dir+picture_filename)
+        else:
+            picture_filename=None
 
         user=User(name, picture_filename=picture_filename)
 
@@ -97,13 +147,24 @@ class Warehouse(object):
             print "User already in database"
         print "Users: ", self.data["users"]
 
-    def add_location_from_keyboard(self):
+    def add_location_from_keyboard(self, nopic=False):
         print "Adding new location"
         name=raw_input("Give new location\n")
+
+        if not nopic:
+            locations_picture_dir=self.pictures_dir+Location.pictures_subdir
+            if not check_create_dir(locations_picture_dir):
+                exit(1)
+            picture_filename=name+".jpg"
+            print "Picture filename", picture_filename
+
+            capture_picture(locations_picture_dir+picture_filename)
+        else:
+            picture_filename=None
+
         description=raw_input("Enter a description\n")
-        location=Location(name, description)
+        location=Location(name, description, picture_filename=picture_filename)
         if location not in self.data["locations"]:
-            #take picture
             location.barcode_id=self.data["free_barcode"]
             print "Barcode id: ", location.barcode_id
             self.data["free_barcode"]+=1
@@ -125,7 +186,7 @@ class Warehouse(object):
             print "Team already in database"
         print "Teams: ", self.data["teams"]
 
-    def add_item_from_keyboard(self):
+    def add_item_from_keyboard(self, nopic=False):
         print "Adding new item"
         name=raw_input("Give new item name\n")
         description=raw_input("Description:\n")
@@ -183,24 +244,16 @@ class Warehouse(object):
         else:
             working_state_description=""
 
-        print "Taking picture"
-        cam=pygame.camera.Camera("/dev/video0", (1280, 720))
-        cam.start()
-        raw_input("Press enter when ready")
-        image=cam.get_image()
-        picture_filename=self.pictures_dir+"items/"
-        if not check_create_dir(picture_filename):
-            exit(1)
-        picture_filename+=name+".jpg"
+        if not nopic:
+            items_picture_dir=self.pictures_dir+Item.pictures_subdir
+            if not check_create_dir(items_picture_dir):
+                exit(1)
+            picture_filename=name+".jpg"
+            print "Picture filename", picture_filename
 
-        print "Picture filename", picture_filename
-        pygame.image.save(image, picture_filename)
-        display=pygame.display.set_mode((1280, 720), 0)
-        display.blit(image, (0,0))
-        pygame.display.flip()
-        #sleep(2)
-        raw_input("Press enter to close window")
-        pygame.display.quit()
+            capture_picture(items_picture_dir+picture_filename)
+        else:
+            picture_filename=None
 
         item=Item(self.data, name, description, location, usage_frequency, team, guardian, usage_function, working_state, working_state_description=working_state_description, placa=placa, picture_filename=picture_filename)
         if item not in self.data["items"]:
@@ -231,6 +284,7 @@ class Warehouse(object):
                +"items: "+repr(self.data["items"]))
 
 class Item:
+    pictures_subdir="items/"
     def __init__(self, parent, name, description, location, usage_frequency, team, guardian, usage_function, working_state, stored=True, placa=None, working_state_description="All fine", picture_filename=None):
         self.parent=parent
         self.name=name
@@ -255,12 +309,14 @@ class Item:
     def __eq__(self, other):
         return(hash(self)==hash(other))
 
+    def show_pic(self, pictures_dir):
+        show_picture(pictures_dir+self.pictures_subdir+self.picture_filename)
+
     def __repr__(self):
-        print "Repr: "
-        print self.name, self.description, self.location.name, self.guardian.name, self.working_state
-        return("\n"+self.name+", "+"Description: "+self.description+", "+"Location: "+self.location.name+", "+"Guardian: "+self.guardian.name+", "+"State: "+self.working_state+", Picture: "+self.picture_filename.split("/")[-1])
+        return("\n"+self.name+", "+"Description: "+self.description+", "+"Location: "+self.location.name+", "+"Guardian: "+self.guardian.name+", "+"State: "+self.working_state+", Picture: "+str(self.picture_filename)+", Barcode: "+str(self.barcode_id))
 
 class Location:
+    pictures_subdir="locations/"
     def __init__(self, name, description, picture_filename=None):
         self.name=name
         self.description=description
@@ -273,8 +329,11 @@ class Location:
     def __eq__(self, other):
         return(hash(self)==hash(other))
 
+    def show_pic(self, pictures_dir):
+        show_picture(pictures_dir+self.pictures_subdir+self.picture_filename)
+
     def __repr__(self):
-        return("\n"+self.name+", "+"Description: "+str(self.description))
+        return("\n"+self.name+", "+"Description: "+str(self.description)+", Picture: "+str(self.picture_filename)+", Barcode: "+str(self.barcode_id))
 
 class Team:
     def __init__(self, name, description):
@@ -291,6 +350,7 @@ class Team:
         return("\n"+self.name+", "+"Description: "+str(self.description))
 
 class User:
+    pictures_subdir="users/"
     def __init__(self, name, picture_filename=None):
         self.name=name
         self.picture_filename=picture_filename
@@ -302,20 +362,24 @@ class User:
     def __eq__(self, other):
         return(hash(self)==hash(other))
 
+    def show_pic(self, pictures_dir):
+        show_picture(pictures_dir+self.pictures_subdir+self.picture_filename)
 
     def __repr__(self):
-        return("\n"+self.name+", "+"Punishment: "+str(self.punishment))
+        return("\n"+self.name+", "+"Punishment: "+str(self.punishment)+", Picture: "+str(self.picture_filename))
 
 def main():
     parser=argparse.ArgumentParser()
     # add : (user, location, item, team)
     parser.add_argument("-a", "--add", help="add something to database", action="store_true")
+    parser.add_argument("-r", "--remove", help="remove something from database", action="store_true")
     parser.add_argument("-u", "--user", help="add user to database", action="store_true")
     parser.add_argument("-l", "--location", help="add location to database", action="store_true")
     parser.add_argument("-i", "--item", help="add item to database", action="store_true")
     parser.add_argument("-t", "--team", help="add team to database", action="store_true")
     parser.add_argument("-s", "--show", help="Print Database", action="store_true")
     parser.add_argument("-b", "--barcode", help="Print barcode", action="store_true")
+    parser.add_argument("--nopic", help="No picture", action="store_true")
     parser.add_argument("-p", "--pictures_dir", help="pictures_directory", default="warehouse/pictures/")
     parser.add_argument("--load", action="store_true")
     parser.add_argument("--store", action="store_true")
@@ -325,12 +389,23 @@ def main():
     pictures_dir=home_dir+"/"+args.pictures_dir
     print "Pictures dir: ", pictures_dir
     if not check_create_dir(pictures_dir):
+        print "Error"
         exit(1)
 
     wh=Warehouse(pictures_dir)
     pygame.init()
     pygame.camera.init()
     pygame.display.init()
+
+    if args.remove:
+        print "Remove from database"
+        if args.barcode:
+            print "Using barcode"
+            detected_barcode=detect_barcode()
+            if detected_barcode:
+                print "Detected barcode: ", detected_barcode
+                item=wh.search_item_barcode(detected_barcode)
+
 
     if args.load:
         print "Loading"
@@ -339,7 +414,7 @@ def main():
     if args.add:
         if args.user:
             print "Adding user"
-            wh.add_user_from_keyboard()
+            wh.add_user_from_keyboard(nopic=args.nopic)
         elif args.location:
             print "Adding location"
             location=wh.add_location_from_keyboard()
@@ -348,7 +423,7 @@ def main():
                 os.system("(bincodes -e 39 -b 1 "+str(location.barcode_id)+" | line2bitmap; textlabel \" "+str(location.name)+"\") | pt1230 -c -m -b -d /dev/usb/lp1")
         elif args.item:
             print "Adding item"
-            item=wh.add_item_from_keyboard()
+            item=wh.add_item_from_keyboard(nopic=args.nopic)
             if args.barcode and item:
                 print "Printing barcode: ", item.barcode_id
                 os.system("(textlabel \" \"; bincodes -e 39 -b 1 "+str(item.barcode_id)+" | line2bitmap; textlabel \" \") | pt1230 -c -m -b -d /dev/usb/lp1")
@@ -363,20 +438,14 @@ def main():
     if args.show:
         if args.barcode:
             print "Print item or location"
-            qr=qrtools.QR()
-            qr.decode_webcam(callback=process_qr)
+            detected_barcode=detect_barcode()
             if detected_barcode:
-                print "Detected barcode: ", detected_barcode
-                item=wh.search_item_barcode(int(detected_barcode))
-                if item:
-                    print "Found item: ", item
+                found=wh.search_barcode(detected_barcode)
+                if found:
+                    print found
+                    found.show_pic(wh.pictures_dir)
                 else:
-                    print "Barcode item not found, searching for location barcode"
-                    location=wh.search_location_barcode(int(detected_barcode))
-                    if location:
-                        print "Found location: ", location
-                    else:
-                        print "Barcode location not found"
+                    print "Error: No item or location found"
             else:
                 print "Error"
         else:
