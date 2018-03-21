@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 
-### add team,user,item,location (option --no_picture)
-### delete item,location with barcode
 ### delete with name (display all before asking to delete)
 ### search with description or barcode (display all alternatives), select alternative, cmd (delete, quit, print barcode(for item, location))
-### fix pictures_directories (objects relative to pics dir), pics dir from cmdline always
 
 
 import argparse
@@ -122,6 +119,30 @@ class Warehouse(object):
             else:
                 print "No item or location found"
                 return(None)
+
+    def remove_item_location(self, data):
+        if data in self.data["items"]:
+            self.data["items"].remove(data)
+        else:
+            if data in self.data["locations"]:
+                self.data["locations"].remove(data)
+            else:
+                print "Error: data not found neither in items nor in locatiosn"
+
+    def search_keyword(self, keyword):
+        print "searching for entries in database with keyword: ", keyword
+        res=[]
+        for table in self.data:
+            print "Table: ", table
+            if type(self.data[table])==type(set()):
+                for entry in self.data[table]:
+                    print "Entry: ", entry
+                    entry_str=repr(entry).lower()
+                    print "Entry string: ", entry_str
+                    if keyword.lower() in entry_str:
+                        print "Found!!!"
+                        res.append(entry)
+        return(res)
 
     def add_user_from_keyboard(self, nopic=False):
         print "Adding new user"
@@ -277,11 +298,11 @@ class Warehouse(object):
         pickle.dump(self.data, f, pickle.HIGHEST_PROTOCOL)
         f.close()
 
-    def __repr__(self):
-        return("users: "+repr(self.data["users"])+"\n"
-               +"teams: "+repr(self.data["teams"])+"\n"
-               +"locations: "+repr(self.data["locations"])+"\n"
-               +"items: "+repr(self.data["items"]))
+    def __str__(self):
+        return("users: "+str(self.data["users"])+"\n"
+               +"teams: "+str(self.data["teams"])+"\n"
+               +"locations: "+str(self.data["locations"])+"\n"
+               +"items: "+str(self.data["items"]))
 
 class Item:
     pictures_subdir="items/"
@@ -313,6 +334,9 @@ class Item:
         show_picture(pictures_dir+self.pictures_subdir+self.picture_filename)
 
     def __repr__(self):
+        return(self.name+self.description+str(self.placa))
+
+    def __str__(self):
         return("\n"+self.name+", "+"Description: "+self.description+", "+"Location: "+self.location.name+", "+"Guardian: "+self.guardian.name+", "+"State: "+self.working_state+", Picture: "+str(self.picture_filename)+", Barcode: "+str(self.barcode_id))
 
 class Location:
@@ -333,6 +357,9 @@ class Location:
         show_picture(pictures_dir+self.pictures_subdir+self.picture_filename)
 
     def __repr__(self):
+        return(self.name+self.description)
+
+    def __str__(self):
         return("\n"+self.name+", "+"Description: "+str(self.description)+", Picture: "+str(self.picture_filename)+", Barcode: "+str(self.barcode_id))
 
 class Team:
@@ -347,6 +374,9 @@ class Team:
         return(hash(self)==hash(other))
 
     def __repr__(self):
+        return(self.name+self.description)
+
+    def __str__(self):
         return("\n"+self.name+", "+"Description: "+str(self.description))
 
 class User:
@@ -366,13 +396,16 @@ class User:
         show_picture(pictures_dir+self.pictures_subdir+self.picture_filename)
 
     def __repr__(self):
+        return(self.name)
+
+    def __str__(self):
         return("\n"+self.name+", "+"Punishment: "+str(self.punishment)+", Picture: "+str(self.picture_filename))
 
 def main():
     parser=argparse.ArgumentParser()
     # add : (user, location, item, team)
     parser.add_argument("-a", "--add", help="add something to database", action="store_true")
-    parser.add_argument("-r", "--remove", help="remove something from database", action="store_true")
+    parser.add_argument("--search", help="search something from database", action="store_true")
     parser.add_argument("-u", "--user", help="add user to database", action="store_true")
     parser.add_argument("-l", "--location", help="add location to database", action="store_true")
     parser.add_argument("-i", "--item", help="add item to database", action="store_true")
@@ -381,6 +414,7 @@ def main():
     parser.add_argument("-b", "--barcode", help="Print barcode", action="store_true")
     parser.add_argument("--nopic", help="No picture", action="store_true")
     parser.add_argument("-p", "--pictures_dir", help="pictures_directory", default="warehouse/pictures/")
+    parser.add_argument("-k", "--keyword", help="Remove or search keywords")
     parser.add_argument("--load", action="store_true")
     parser.add_argument("--store", action="store_true")
     args=parser.parse_args()
@@ -397,19 +431,71 @@ def main():
     pygame.camera.init()
     pygame.display.init()
 
-    if args.remove:
-        print "Remove from database"
+
+    if args.load:
+        print "Loading"
+        wh.load_from_file("test.dat")
+
+
+
+    if args.search:
+        print "search from database"
         if args.barcode:
             print "Using barcode"
             detected_barcode=detect_barcode()
             if detected_barcode:
                 print "Detected barcode: ", detected_barcode
-                item=wh.search_item_barcode(detected_barcode)
+                found=wh.search_barcode(detected_barcode)
+                if found:
+                    print found
+                    found.show_pic(wh.pictures_dir)
+                    cmd=raw_input("Press desired command: r: remove, p: print barcode\n")
+                    if cmd=="r":
+                        print "Removing"
+                        wh.remove_item_location(found)
+                    if cmd=="p":
+                        if type(found)==type(Location("test", "test")):
+                            print "It is a location"
+                            os.system("(bincodes -e 39 -b 1 "+str(found.barcode_id)+" | line2bitmap; textlabel \" "+str(found.name)+"\") | pt1230 -c -m -b -d /dev/usb/lp1")
+                        if type(found)==type(Item(None, "test", "test", None, None, None, None, None, None)):
+                            os.system("(textlabel \" \"; bincodes -e 39 -b 1 "+str(found.barcode_id)+" | line2bitmap; textlabel \" \") | pt1230 -c -m -b -d /dev/usb/lp1")
+                    else:
+                        print "Quitting"
+                else:
+                    print "Barcode not found in database"
+            else:
+                print "No barcode detected"
+        if args.keyword:
+            print "Searching for keyword: ", args.keyword
+            res=wh.search_keyword(args.keyword)
+            if len(res)==0:
+                print "No results"
+            else:
+                print "Search results:"
+                for i, j in enumerate(res):
+                    print i, ": ", j
+                cmd=raw_input("Press the entry number to select from database or press enter to quit\n")
+                if cmd!="":
+                    entry=res[int(cmd)]
+                    print "Selected entry: ", int(cmd), entry
+                    cmd2=raw_input("Press desired command: r: remove, p: print barcode\n")
+                    if cmd2=="r":
+                        print "Removing"
+                        wh.remove_item_location(entry)
+                    if cmd=="p":
+                        if type(entry)==type(Location("test", "test")):
+                            print "It is a location"
+                            os.system("(bincodes -e 39 -b 1 "+str(entry.barcode_id)+" | line2bitmap; textlabel \" "+str(entry.name)+"\") | pt1230 -c -m -b -d /dev/usb/lp1")
+                        if type(entry)==type(Item(None, "test", "test", None, None, None, None, None, None)):
+                            os.system("(textlabel \" \"; bincodes -e 39 -b 1 "+str(entry.barcode_id)+" | line2bitmap; textlabel \" \") | pt1230 -c -m -b -d /dev/usb/lp1")
+                    else:
+                        print "Quitting"
+                else:
+                    print "Quitting"
+                    
+        else:
+            print "Not removing"
 
-
-    if args.load:
-        print "Loading"
-        wh.load_from_file("test.dat")
 
     if args.add:
         if args.user:
