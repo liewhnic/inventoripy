@@ -454,10 +454,10 @@ def main():
                         print "Removing"
                         wh.remove_item_location(found)
                     if cmd=="p":
-                        if type(found)==type(Location("test", "test")):
+                        if isinstance(found, Location):
                             print "It is a location"
                             os.system("(bincodes -e 39 -b 1 "+str(found.barcode_id)+" | line2bitmap; textlabel \" "+str(found.name)+"\") | pt1230 -c -m -b -d /dev/usb/lp1")
-                        if type(found)==type(Item(None, "test", "test", None, None, None, None, None, None)):
+                        if isinstance(found, Item):
                             os.system("(textlabel \" \"; bincodes -e 39 -b 1 "+str(found.barcode_id)+" | line2bitmap; textlabel \" \") | pt1230 -c -m -b -d /dev/usb/lp1")
                     else:
                         print "Quitting"
@@ -465,7 +465,7 @@ def main():
                     print "Barcode not found in database"
             else:
                 print "No barcode detected"
-        if args.keyword:
+        elif args.keyword:
             print "Searching for keyword: ", args.keyword
             res=wh.search_keyword(args.keyword)
             if len(res)==0:
@@ -482,11 +482,13 @@ def main():
                     if cmd2=="r":
                         print "Removing"
                         wh.remove_item_location(entry)
-                    if cmd=="p":
-                        if type(entry)==type(Location("test", "test")):
+                    if cmd2=="p":
+                        print "Types: ", type(entry), Location
+                        if isinstance(entry,Location):
                             print "It is a location"
                             os.system("(bincodes -e 39 -b 1 "+str(entry.barcode_id)+" | line2bitmap; textlabel \" "+str(entry.name)+"\") | pt1230 -c -m -b -d /dev/usb/lp1")
-                        if type(entry)==type(Item(None, "test", "test", None, None, None, None, None, None)):
+                        if isinstance(entry, Item):
+                            print "It is an Item"
                             os.system("(textlabel \" \"; bincodes -e 39 -b 1 "+str(entry.barcode_id)+" | line2bitmap; textlabel \" \") | pt1230 -c -m -b -d /dev/usb/lp1")
                     else:
                         print "Quitting"
