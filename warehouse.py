@@ -351,7 +351,7 @@ def main():
             item=wh.add_item_from_keyboard()
             if args.barcode and item:
                 print "Printing barcode: ", item.barcode_id
-                os.system("bincodes -e 39 -b 1 "+str(item.barcode_id)+" | line2bitmap | pt1230 -c -m -b -d /dev/usb/lp1")
+                os.system("(textlabel \" \"; bincodes -e 39 -b 1 "+str(item.barcode_id)+" | line2bitmap; textlabel \" \") | pt1230 -c -m -b -d /dev/usb/lp1")
         elif args.team:
             print "Adding team"
             wh.add_team_from_keyboard()
