@@ -11,6 +11,7 @@ import pygame.display
 from time import sleep
 import os
 import hashlib
+import qrtools
 
 def check_create_dir(mydir):
     if not exists(mydir):
@@ -28,7 +29,13 @@ def check_create_dir(mydir):
             print "Desired directory is actually a file, please remove this file before continuing"
             return(False)
 
+detected_barcode=None
 
+def process_qr(data):
+    os.system("beep -f 500 -l 60")
+    print "Barcode detected: ", data
+    global detected_barcode
+    detected_barcode=data
 
 
 class Warehouse(object):
@@ -43,6 +50,20 @@ class Warehouse(object):
             "teams": set(),
             "free_barcode": 0
             }
+
+    def search_item_barcode(self, barcode):
+        for item in self.data["items"]:
+            print "Item: ", item.name, " barcode: ", item.barcode_id
+            if item.barcode_id==barcode:
+                return(item)
+        return(None)
+
+    def search_location_barcode(self, barcode):
+        for location in self.data["locations"]:
+            print "Location: ", location.name, " barcode: ", location.barcode_id
+            if location.barcode_id==barcode:
+                return(location)
+        return(None)
 
     def add_user_from_keyboard(self):
         print "Adding new user"
@@ -340,8 +361,27 @@ def main():
         wh.store_to_file("test.dat")
 
     if args.show:
-        print "Printing database"
-        print wh
+        if args.barcode:
+            print "Print item or location"
+            qr=qrtools.QR()
+            qr.decode_webcam(callback=process_qr)
+            if detected_barcode:
+                print "Detected barcode: ", detected_barcode
+                item=wh.search_item_barcode(int(detected_barcode))
+                if item:
+                    print "Found item: ", item
+                else:
+                    print "Barcode item not found, searching for location barcode"
+                    location=wh.search_location_barcode(int(detected_barcode))
+                    if location:
+                        print "Found location: ", location
+                    else:
+                        print "Barcode location not found"
+            else:
+                print "Error"
+        else:
+            print "Printing database"
+            print wh
 
 if __name__=="__main__":
     main()
