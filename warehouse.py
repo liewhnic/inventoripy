@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
-### delete with name (display all before asking to delete)
-### search with description or barcode (display all alternatives), select alternative, cmd (delete, quit, print barcode(for item, location))
-
+#add feed to cut tape
 
 import argparse
 import pickle
@@ -413,6 +411,7 @@ def main():
     parser.add_argument("-s", "--show", help="Print Database", action="store_true")
     parser.add_argument("-b", "--barcode", help="Print barcode", action="store_true")
     parser.add_argument("--nopic", help="No picture", action="store_true")
+    parser.add_argument("-f", "--feedprinter", help="Feed printer for cutting", action="store_true")
     parser.add_argument("-p", "--pictures_dir", help="pictures_directory", default="warehouse/pictures/")
     parser.add_argument("-k", "--keyword", help="Remove or search keywords")
     parser.add_argument("--load", action="store_true")
@@ -478,6 +477,7 @@ def main():
                 if cmd!="":
                     entry=res[int(cmd)]
                     print "Selected entry: ", int(cmd), entry
+                    entry.show_pic(wh.pictures_dir)
                     cmd2=raw_input("Press desired command: r: remove, p: print barcode\n")
                     if cmd2=="r":
                         print "Removing"
@@ -539,6 +539,9 @@ def main():
         else:
             print "Printing database"
             print wh
+
+    if args.feedprinter:
+        os.system("textlabel \"       \" | pt1230 -c -m -b -d /dev/usb/lp1")
 
 if __name__=="__main__":
     main()
