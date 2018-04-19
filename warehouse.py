@@ -79,13 +79,15 @@ def show_picture(full_picture_filename):
         pygame.display.quit()
     except:
         print "Error loading file"
-    
+
 
 class Warehouse(object):
     usage_functions=["unspecified", "hand tool", "electric tool", "electronic component", "raw metal", "raw plastic", "computer accesory"]
     working_states=["unknow", "good", "bad"]
-    def __init__(self, pictures_dir):
-        self.pictures_dir=pictures_dir
+    def __init__(self, config_dir="warehouse/", config_file="warehouse.dat"):
+        self.config_dir=config_dir
+        self.pictures_dir=config_dir+"pictures/"
+        self.config_file=config_file
         self.data={
             "items": set(),
             "locations": set(),
@@ -287,14 +289,14 @@ class Warehouse(object):
             print "Item already in database"
         print "Items: ", self.data["items"]
 
-    def load_from_file(self, filename):
-        f=open(filename,'rb')
+    def load_from_file(self):
+        f=open(self.config_dir+self.config_file,'rb')
         data=pickle.load(f)
         f.close()
         self.data=data
 
-    def store_to_file(self, filename):
-        f=open(filename, "wb")
+    def store_to_file(self):
+        f=open(self.config_dir+self.config_file, "wb")
         pickle.dump(self.data, f, pickle.HIGHEST_PROTOCOL)
         f.close()
 
@@ -413,20 +415,25 @@ def main():
     parser.add_argument("-s", "--show", help="Print Database", action="store_true")
     parser.add_argument("-b", "--barcode", help="Print barcode", action="store_true")
     parser.add_argument("--nopic", help="No picture", action="store_true")
-    parser.add_argument("-p", "--pictures_dir", help="pictures_directory", default="warehouse/pictures/")
+    parser.add_argument("-c", "--config_dir", help="config_directory", default="warehouse/")
     parser.add_argument("-k", "--keyword", help="Remove or search keywords")
+    parser.add_argument("-d", "--device", help="Printer device filename",default= "/dev/usb/lp0")
     parser.add_argument("--load", action="store_true")
     parser.add_argument("--store", action="store_true")
     args=parser.parse_args()
 
     home_dir= expanduser("~")
-    pictures_dir=home_dir+"/"+args.pictures_dir
+    config_dir=home_dir+"/"+args.config_dir
+    pictures_dir=config_dir+"pictures/"
     print "Pictures dir: ", pictures_dir
+    if not check_create_dir(config_dir):
+        print "Error"
+        exit(1)
     if not check_create_dir(pictures_dir):
         print "Error"
         exit(1)
 
-    wh=Warehouse(pictures_dir)
+    wh=Warehouse(config_dir=config_dir)
     pygame.init()
     pygame.camera.init()
     pygame.display.init()
@@ -434,7 +441,7 @@ def main():
 
     if args.load:
         print "Loading"
-        wh.load_from_file("test.dat")
+        wh.load_from_file()
 
 
 
@@ -456,9 +463,16 @@ def main():
                     if cmd=="p":
                         if isinstance(found, Location):
                             print "It is a location"
-                            os.system("(bincodes -e 39 -b 1 "+str(found.barcode_id)+" | line2bitmap; textlabel \" "+str(found.name)+"\") | pt1230 -c -m -b -d /dev/usb/lp1")
+                            os.system("(bincodes -e 39 -b 1 "
+                                      +str(found.barcode_id)+
+                                      " | line2bitmap; textlabel \" "+
+                                      str(found.name)
+                                      +"\") | pt1230 -c -m -b -d "+args.device)
                         if isinstance(found, Item):
-                            os.system("(textlabel \" \"; bincodes -e 39 -b 1 "+str(found.barcode_id)+" | line2bitmap; textlabel \" \") | pt1230 -c -m -b -d /dev/usb/lp1")
+                            os.system("(textlabel \" \"; bincodes -e 39 -b 1 "
+                                      +str(found.barcode_id)
+                                      +" | line2bitmap; textlabel \" \") | pt1230 -c -m -b -d "+
+                                      args.device)
                     else:
                         print "Quitting"
                 else:
@@ -486,15 +500,19 @@ def main():
                         print "Types: ", type(entry), Location
                         if isinstance(entry,Location):
                             print "It is a location"
-                            os.system("(bincodes -e 39 -b 1 "+str(entry.barcode_id)+" | line2bitmap; textlabel \" "+str(entry.name)+"\") | pt1230 -c -m -b -d /dev/usb/lp1")
+                            os.system("(bincodes -e 39 -b 1 "+str(entry.barcode_id)+" | line2bitmap; textlabel \" "
+                                      +str(entry.name)
+                                      +"\") | pt1230 -c -m -b -d "+args.device)
                         if isinstance(entry, Item):
                             print "It is an Item"
-                            os.system("(textlabel \" \"; bincodes -e 39 -b 1 "+str(entry.barcode_id)+" | line2bitmap; textlabel \" \") | pt1230 -c -m -b -d /dev/usb/lp1")
+                            os.system("(textlabel \" \"; bincodes -e 39 -b 1 "+str(entry.barcode_id)
+                                      +" | line2bitmap; textlabel \" \") | pt1230 -c -m -b -d "+
+                                      args.device)
                     else:
                         print "Quitting"
                 else:
                     print "Quitting"
-                    
+
         else:
             print "Not removing"
 
@@ -508,20 +526,22 @@ def main():
             location=wh.add_location_from_keyboard()
             if args.barcode and location:
                 print "Printing location and barcode: ", location.barcode_id
-                os.system("(bincodes -e 39 -b 1 "+str(location.barcode_id)+" | line2bitmap; textlabel \" "+str(location.name)+"\") | pt1230 -c -m -b -d /dev/usb/lp1")
+                os.system("(bincodes -e 39 -b 1 "+str(location.barcode_id)+" | line2bitmap; textlabel \" "+str(location.name)+"\") | pt1230 -c -m -b -d "
+                          +args.device)
         elif args.item:
             print "Adding item"
             item=wh.add_item_from_keyboard(nopic=args.nopic)
             if args.barcode and item:
                 print "Printing barcode: ", item.barcode_id
-                os.system("(textlabel \" \"; bincodes -e 39 -b 1 "+str(item.barcode_id)+" | line2bitmap; textlabel \" \") | pt1230 -c -m -b -d /dev/usb/lp1")
+                os.system("(textlabel \" \"; bincodes -e 39 -b 1 "+str(item.barcode_id)+" | line2bitmap; textlabel \" \") | pt1230 -c -m -b -d "
+                          +args.device)
         elif args.team:
             print "Adding team"
             wh.add_team_from_keyboard()
 
     if args.store:
         print "Storing"
-        wh.store_to_file("test.dat")
+        wh.store_to_file()
 
     if args.show:
         if args.barcode:
