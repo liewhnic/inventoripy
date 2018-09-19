@@ -14,6 +14,18 @@ from time import sleep
 import os
 import hashlib
 import qrtools
+from time import sleep
+
+def read_number(data=""):
+    print data
+    while True:
+        try:
+            val=int(raw_input())
+        except ValueError:
+            print "Not a number, try again"
+        else:
+            break
+    return(val)
 
 def check_create_dir(mydir):
     if not exists(mydir):
@@ -91,6 +103,7 @@ class Warehouse(object):
             "locations": set(),
             "users": set(),
             "teams": set(),
+            "owners": set(),
             "free_barcode": 0
             }
 
@@ -146,7 +159,9 @@ class Warehouse(object):
 
     def add_user_from_keyboard(self, nopic=False):
         print "Adding new user"
-        name=raw_input("Give new username\n")
+        name=""
+        while len(name)==0:
+            name=raw_input("Give new username\n")
 
         if not nopic:
             users_picture_dir=self.pictures_dir+User.pictures_subdir
@@ -170,7 +185,9 @@ class Warehouse(object):
 
     def add_location_from_keyboard(self, nopic=False):
         print "Adding new location"
-        name=raw_input("Give new location\n")
+        name=""
+        while len(name)==0:
+            name=raw_input("Give new location\n")
 
         if not nopic:
             locations_picture_dir=self.pictures_dir+Location.pictures_subdir
@@ -197,7 +214,9 @@ class Warehouse(object):
 
     def add_team_from_keyboard(self):
         print "Adding new team"
-        name=raw_input("Give new team\n")
+        name=""
+        while len(name)==0:
+            name=raw_input("Give new team\n")
         description=raw_input("Enter a description\n")
         team=Team(name, description)
         if team not in self.data["teams"]:
@@ -207,9 +226,25 @@ class Warehouse(object):
             print "Team already in database"
         print "Teams: ", self.data["teams"]
 
+    def add_owner_from_keyboard(self):
+        print "Adding new owner"
+        name=""
+        while len(name)==0:
+            name=raw_input("Give new owner\n")
+        description=raw_input("Enter a description\n")
+        owner=Owner(name, description)
+        if owner not in self.data["owners"]:
+            #take picture
+            self.data["owners"].add(owner)
+        else:
+            print "Owner already in database"
+        print "Owners: ", self.data["owners"]
+
     def add_item_from_keyboard(self, nopic=False):
         print "Adding new item"
-        name=raw_input("Give new item name\n")
+        name=""
+        while len(name)==0:
+            name=raw_input("Give new item name\n")
         description=raw_input("Description:\n")
         print "Select location number\n"
         locations=[]
@@ -217,20 +252,30 @@ class Warehouse(object):
             locations.append(location)
             print i, ": ", location
         #location (select from posible locations)
-        location_n=int(raw_input())
+        location_n=read_number()
         location=locations[location_n]
         print "Selected location: ", location
-        usage_frequency=int(raw_input("Select usage frequency (0: low, 1: medium, 2: high)\n"))
+        usage_frequency=read_number("Select usage frequency (0: low, 1: medium, 2: high)\n")
 
-        print "Select team (0: unspecified)\n"
+        print "Select team\n"
         teams=[]
         for i, team in enumerate(self.data["teams"]):
             teams.append(team)
             print i, ": ", team
         #team (select from posible teams)
-        team_n=int(raw_input())
+        team_n=read_number()
         team=teams[team_n]
         print "Selected team: ", team
+
+        print "Select owner\n"
+        owners=[]
+        for i, owner in enumerate(self.data["owners"]):
+            owners.append(owner)
+            print i, ": ", owner
+        #owner (select from posible owners)
+        owner_n=read_number()
+        owner=owners[owner_n]
+        print "Selected owner: ", owner
 
         print "Select guardian (0: unspecified)\n"
         users=[]
@@ -238,7 +283,7 @@ class Warehouse(object):
             users.append(user)
             print i, ": ", user
         #guardian (select from posible users)
-        user_n=int(raw_input())
+        user_n=read_number()
         guardian=users[user_n]
         print "Selected guardian: ", guardian
 
@@ -246,17 +291,17 @@ class Warehouse(object):
         for i, usage_function in enumerate(self.usage_functions):
             print i, ": ", usage_function
         #usage_function (select from posible usage_functions)
-        usage_function_n=int(raw_input())
+        usage_function_n=read_number()
         usage_function=self.usage_functions[usage_function_n]
         print "Selected usage_function: ", usage_function
 
-        placa=int(raw_input("Enter \"placa\":\n"))
+        placa=read_number("Enter \"placa\":\n")
         # todo: check placa is not repeated
 
         print "Select working state (0: unknow)\n"
         for i, working_state in enumerate(self.working_states):
             print i, ": ", working_state
-        working_state_n=int(raw_input())
+        working_state_n=read_number()
         working_state=self.working_states[working_state_n]
         print "Selected working state: ", working_state
 
@@ -276,7 +321,7 @@ class Warehouse(object):
         else:
             picture_filename=None
 
-        item=Item(self.data, name, description, location, usage_frequency, team, guardian, usage_function, working_state, working_state_description=working_state_description, placa=placa, picture_filename=picture_filename)
+        item=Item(self.data, name, description, location, usage_frequency, team, guardian, owner, usage_function, working_state, working_state_description=working_state_description, placa=placa, picture_filename=picture_filename)
         if item not in self.data["items"]:
             item.barcode_id=self.data["free_barcode"]
             print "Barcode id: ", item.barcode_id
@@ -301,12 +346,13 @@ class Warehouse(object):
     def __str__(self):
         return("users: "+str(self.data["users"])+"\n"
                +"teams: "+str(self.data["teams"])+"\n"
+               +"owners: "+str(self.data["owners"])+"\n"
                +"locations: "+str(self.data["locations"])+"\n"
                +"items: "+str(self.data["items"]))
 
 class Item:
     pictures_subdir="items/"
-    def __init__(self, parent, name, description, location, usage_frequency, team, guardian, usage_function, working_state, stored=True, placa=None, working_state_description="All fine", picture_filename=None):
+    def __init__(self, parent, name, description, location, usage_frequency, team, guardian, owner, usage_function, working_state, stored=True, placa=None, working_state_description="All fine", picture_filename=None):
         self.parent=parent
         self.name=name
         self.description=description
@@ -314,6 +360,7 @@ class Item:
         self.usage_frequency=usage_frequency
         self.team=team
         self.guardian=guardian
+        self.owner=owner
         self.usage_function=usage_function
         self.stored=stored
         self.placa=placa
@@ -337,7 +384,7 @@ class Item:
         return(self.name+self.description+str(self.placa))
 
     def __str__(self):
-        return("\n"+self.name+", "+"Description: "+self.description+", "+"Location: "+self.location.name+", "+"Guardian: "+self.guardian.name+", "+"State: "+self.working_state+", Picture: "+str(self.picture_filename)+", Barcode: "+str(self.barcode_id))
+        return("\n"+self.name+", "+"Description: "+self.description+", "+"Location: "+self.location.name+", "+"Guardian: "+self.guardian.name+", "+"Owner: "+self.owner.name+", "+"State: "+self.working_state+", Picture: "+str(self.picture_filename)+", Barcode: "+str(self.barcode_id))
 
 class Location:
     pictures_subdir="locations/"
@@ -363,6 +410,23 @@ class Location:
         return("\n"+self.name+", "+"Description: "+str(self.description)+", Picture: "+str(self.picture_filename)+", Barcode: "+str(self.barcode_id))
 
 class Team:
+    def __init__(self, name, description):
+        self.name=name
+        self.description=description
+
+    def __hash__(self):
+        return(hash(self.name))
+
+    def __eq__(self, other):
+        return(hash(self)==hash(other))
+
+    def __repr__(self):
+        return(self.name+self.description)
+
+    def __str__(self):
+        return("\n"+self.name+", "+"Description: "+str(self.description))
+
+class Owner:
     def __init__(self, name, description):
         self.name=name
         self.description=description
@@ -410,9 +474,12 @@ def main():
     parser.add_argument("-l", "--location", help="add location to database", action="store_true")
     parser.add_argument("-i", "--item", help="add item to database", action="store_true")
     parser.add_argument("-t", "--team", help="add team to database", action="store_true")
+    parser.add_argument("-o", "--owner", help="add owner to database", action="store_true")
     parser.add_argument("-s", "--show", help="Print Database", action="store_true")
-    parser.add_argument("-b", "--barcode", help="Print barcode", action="store_true")
+    parser.add_argument("-b", "--barcode", help="Print/search barcode", action="store_true")
     parser.add_argument("--nopic", help="No picture", action="store_true")
+    parser.add_argument("--pname", help="Print Name", action="store_true")
+    parser.add_argument("--powner", help="Print Owner", action="store_true")
     parser.add_argument("-f", "--feedprinter", help="Feed printer for cutting", action="store_true")
     parser.add_argument("-c", "--config_dir", help="config_directory", default="warehouse/")
     parser.add_argument("-k", "--keyword", help="Remove or search keywords")
@@ -460,6 +527,9 @@ def main():
                         print "Removing"
                         wh.remove_item_location(found)
                     if cmd=="p":
+                        while not os.path.exists(args.device):
+                            print "Connect device to: ", args.device
+                            sleep(2)
                         if isinstance(found, Location):
                             print "It is a location"
                             os.system("(bincodes -e 39 -b 1 "
@@ -468,9 +538,19 @@ def main():
                                       str(found.name)
                                       +"\") | pt1230 -c -m -b -d "+args.device)
                         if isinstance(found, Item):
+                            text=""
+                            if found.placa != 0:
+                                text+=found.name+","+found.owner.name
+                            else:
+                                if args.pname:
+                                    text+=found.name
+                                if args.pname and args.powner:
+                                    text+=","
+                                if args.powner:
+                                    text+=found.owner.name
                             os.system("(textlabel \" \"; bincodes -e 39 -b 1 "
                                       +str(found.barcode_id)
-                                      +" | line2bitmap; textlabel \" \") | pt1230 -c -m -b -d "+
+                                      +" | line2bitmap; textlabel --width 32 \" "+str(text)+"\") | pt1230 -c -m -b -d "+
                                       args.device)
                     else:
                         print "Quitting"
@@ -498,6 +578,9 @@ def main():
                         wh.remove_item_location(entry)
                     if cmd2=="p":
                         print "Types: ", type(entry), Location
+                        while not os.path.exists(args.device):
+                            print "Connect device to: ", args.device
+                            sleep(2)
                         if isinstance(entry,Location):
                             print "It is a location"
                             os.system("(bincodes -e 39 -b 1 "+str(entry.barcode_id)+" | line2bitmap; textlabel \" "
@@ -505,8 +588,18 @@ def main():
                                       +"\") | pt1230 -c -m -b -d "+args.device)
                         if isinstance(entry, Item):
                             print "It is an Item"
+                            text=""
+                            if entry.placa != 0:
+                                text+=entry.name+","+entry.owner.name
+                            else:
+                                if args.pname:
+                                    text+=entry.name
+                                if args.pname and args.powner:
+                                    text+=","
+                                if args.powner:
+                                    text+=entry.owner.name
                             os.system("(textlabel \" \"; bincodes -e 39 -b 1 "+str(entry.barcode_id)
-                                      +" | line2bitmap; textlabel \" \") | pt1230 -c -m -b -d "+
+                                      +" | line2bitmap; textlabel --width 32 \" "+str(text)+"\") | pt1230 -c -m -b -d "+
                                       args.device)
                     else:
                         print "Quitting"
@@ -526,18 +619,40 @@ def main():
             location=wh.add_location_from_keyboard()
             if args.barcode and location:
                 print "Printing location and barcode: ", location.barcode_id
-                os.system("(bincodes -e 39 -b 1 "+str(location.barcode_id)+" | line2bitmap; textlabel \" "+str(location.name)+"\") | pt1230 -c -m -b -d "
+                while not os.path.exists(args.device):
+                    print "Connect device to: ", args.device
+                    sleep(2)
+                os.system("(bincodes -e 39 -b 1 "+str(location.barcode_id)+" | line2bitmap; textlabel \" "
+                          +str(location.name)+"\") | pt1230 -c -m -b -d "
                           +args.device)
         elif args.item:
             print "Adding item"
             item=wh.add_item_from_keyboard(nopic=args.nopic)
             if args.barcode and item:
                 print "Printing barcode: ", item.barcode_id
-                os.system("(textlabel \" \"; bincodes -e 39 -b 1 "+str(item.barcode_id)+" | line2bitmap; textlabel \" \") | pt1230 -c -m -b -d "
+                while not os.path.exists(args.device):
+                    print "Connect device to: ", args.device
+                    sleep(2)
+                text=""
+                if item.placa != 0:
+                    text+=item.name+","+item.owner.name
+                else:
+                    if args.pname:
+                        text+=item.name
+                    if args.pname and args.powner:
+                        text+=","
+                    if args.powner:
+                        text+=item.owner.name
+                os.system("(textlabel \" \"; bincodes -e 39 -b 1 "+str(item.barcode_id)+
+                          " | line2bitmap; textlabel --width 32 \" "+str(text)+"\") | pt1230 -c -m -b -d "
                           +args.device)
         elif args.team:
             print "Adding team"
             wh.add_team_from_keyboard()
+
+        elif args.owner:
+            print "Adding owner"
+            wh.add_owner_from_keyboard()
 
     if args.store:
         print "Storing"
