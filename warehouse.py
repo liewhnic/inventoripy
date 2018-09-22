@@ -384,7 +384,7 @@ class Item:
         return(self.name+self.description+str(self.placa))
 
     def __str__(self):
-        return("\n"+self.name+", "+"Description: "+self.description+", "+"Location: "+self.location.name+", "+"Guardian: "+self.guardian.name+", "+"Owner: "+self.owner.name+", "+"State: "+self.working_state+", Picture: "+str(self.picture_filename)+", Barcode: "+str(self.barcode_id))
+        return("\n"+self.name+", "+"Description: "+self.description+", "+"Location: "+self.location.name+", "+"Guardian: "+self.guardian.name+", "+"Owner: "+self.owner.name+", "+"State: "+self.working_state+", Picture: "+str(self.picture_filename)+", Placa: "+str(self.placa)+", Barcode: "+str(self.barcode_id))
 
 class Location:
     pictures_subdir="locations/"
